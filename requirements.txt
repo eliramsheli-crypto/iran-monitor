@@ -3,3 +3,4 @@ yfinance
 folium
 streamlit-folium
 feedparser
+plotly
