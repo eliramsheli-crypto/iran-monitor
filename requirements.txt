@@ -1,6 +1,6 @@
 streamlit
 yfinance
+plotly
+feedparser
 folium
 streamlit-folium
-feedparser
-plotly
