@@ -1,53 +1,72 @@
 import streamlit as st
-import asyncio
-import telegram
 import yfinance as yf
 import pandas as pd
 import folium
 from streamlit_folium import folium_static
 from datetime import datetime
-import os
+import urllib.parse
 
-# --- משיכת פרטים מאובטחים מהגדרות השרת ---
-# במקום הטוקן עצמו, אנחנו משתמשים במפתחות סודיים
-try:
-    TELEGRAM_TOKEN = st.secrets["TELEGRAM_TOKEN"]
-    CHAT_ID = st.secrets["CHAT_ID"]
-except Exception:
-    st.error("שגיאה: חסרים מפתחות אבטחה (Secrets) בהגדרות המערכת.")
-    st.stop()
+# הגדרות דף
+st.set_page_config(page_title="מערכת ניטור איומים - אלירם", layout="wide")
 
-LOG_FILE = 'security_log.csv'
+st.title("🛡️ לוח בקרה מודיעיני: איראן - ישראל")
 
-async def send_alert(msg):
-    bot = telegram.Bot(token=TELEGRAM_TOKEN)
-    async with bot:
-        await bot.send_message(chat_id=CHAT_ID, text=msg, parse_mode='Markdown')
+# --- פונקציה ליצירת קישור וואטסאפ ---
+def send_whatsapp_msg(phone, message):
+    # מקודד את ההודעה לפורמט של קישור אינטרנט
+    encoded_msg = urllib.parse.quote(message)
+    link = f"https://wa.me/{phone}?text={encoded_msg}"
+    return link
 
-def log_to_excel(risk, reasons):
-    df = pd.DataFrame([{'Time': datetime.now(), 'Risk': risk, 'Details': ", ".join(reasons)}])
-    df.to_csv(LOG_FILE, mode='a', header=not os.path.exists(LOG_FILE), index=False, encoding='utf-8-sig')
+# --- נתוני אמת ---
+def get_oil_price():
+    try:
+        oil = yf.Ticker("CL=F")
+        return oil.history(period="1d")['Close'].iloc[-1]
+    except:
+        return 80.0
 
-st.set_page_config(page_title="מערכת חיזוי איום איראני", layout="wide")
+oil_price = get_oil_price()
 
-st.title("🛡️ מערכת מודיעין וחיזוי: איראן-ישראל")
-
-# נתונים לדוגמה (ניתן להוסיף כאן את ה-APIs)
-risk_score = 42 
-active_sites = ["Tehran"]
-news_briefs = {"Tehran": "דיווחים על הגברת אבטחה בקריית הממשלה."}
-
+# --- ממשק המשתמש ---
 col1, col2 = st.columns([1, 2])
 
 with col1:
-    st.metric("רמת סיכון משוקללת", f"{risk_score}%")
-    if st.button("שלח התראה לטלגרם"):
-        asyncio.run(send_alert(f"⚠️ עדכון מהשרת: רמת סיכון נוכחית {risk_score}%"))
-        st.success("ההתראה נשלחה מהענן!")
+    st.subheader("📊 מדדים קריטיים")
+    st.metric("מחיר חבית נפט (WTI)", f"${oil_price:.2f}")
+    
+    st.write("---")
+    st.subheader("📲 דיווח מהיר")
+    
+    # כאן תכניס את מספר הטלפון שלך בפורמט בינלאומי (ללא ה-+ בהתחלה)
+    # למשל: 972501234567
+    my_phone = "972500000000" # <--- שנה למספר שלך
+    
+    alert_text = f"⚠️ עדכון אבטחה מלוח הבקרה:\nרמת סיכון נוכחית נבדקה.\nמחיר נפט: ${oil_price:.2f}\nזמן: {datetime.now().strftime('%H:%M')}"
+    
+    wa_link = send_whatsapp_msg(my_phone, alert_text)
+    
+    # יצירת כפתור שנראה כמו קישור לוואטסאפ
+    st.markdown(f'''
+        <a href="{wa_link}" target="_blank">
+            <button style="
+                background-color: #25D366;
+                color: white;
+                padding: 10px 20px;
+                border: none;
+                border-radius: 5px;
+                cursor: pointer;
+                font-size: 16px;
+                width: 100%;">
+                שלח דיווח ל-WhatsApp 💬
+            </button>
+        </a>
+    ''', unsafe_allow_ Harris=True)
 
 with col2:
+    st.subheader("🗺️ מפת פריסה ואיומים")
     m = folium.Map(location=[32.427, 53.688], zoom_start=5, tiles="CartoDB dark_matter")
-    for city, coords in {"Tehran": [35.68, 51.38], "Isfahan": [32.65, 51.66]}.items():
-        color = "red" if city in active_sites else "green"
-        folium.CircleMarker(coords, radius=10, color=color, fill=True, popup=news_briefs.get(city, "שגרה")).add_to(m)
+    folium.CircleMarker([35.68, 51.38], radius=10, color="red", fill=True, popup="טהרן").add_to(m)
     folium_static(m)
+
+st.caption(f"זמן עדכון אחרון: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
