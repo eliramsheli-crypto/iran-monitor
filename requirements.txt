@@ -1,6 +1,5 @@
 streamlit
-python-telegram-bot
 yfinance
-pandas
 folium
 streamlit-folium
+feedparser
