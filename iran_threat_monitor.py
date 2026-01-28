@@ -1,88 +1,86 @@
 import streamlit as st
 import yfinance as yf
-import folium
-from streamlit_folium import folium_static
+import plotly.graph_objects as go
+import feedparser
 from datetime import datetime
 import urllib.parse
-import feedparser
 
 # הגדרות דף
 st.set_page_config(page_title="מערכת ניטור איומים - אלירם", layout="wide")
 
-st.title("🛡️ לוח בקרה מודיעיני: איראן - ישראל")
+st.title("🛡️ לוח בקרה מודיעיני: אלירם")
 
-# --- פונקציות נתונים ---
-def get_data(ticker):
-    try:
-        data = yf.Ticker(ticker)
-        return data.history(period="1d")['Close'].iloc[-1]
-    except:
-        return 0.0
+# --- פונקציות עזר ---
+def create_gauge(title, value, color):
+    fig = go.Figure(go.Indicator(
+        mode = "gauge+number",
+        value = value,
+        title = {'text': title, 'font': {'size': 24}},
+        gauge = {
+            'axis': {'range': [0, 100], 'tickwidth': 1},
+            'bar': {'color': color},
+            'bgcolor': "white",
+            'steps': [
+                {'range': [0, 40], 'color': "rgba(0, 255, 0, 0.3)"},
+                {'range': [40, 75], 'color': "rgba(255, 255, 0, 0.3)"},
+                {'range': [75, 100], 'color': "rgba(255, 0, 0, 0.3)"}
+            ],
+            'threshold': {
+                'line': {'color': "black", 'width': 4},
+                'thickness': 0.75,
+                'value': value
+            }
+        }
+    ))
+    fig.update_layout(height=300, margin=dict(l=20, r=20, t=50, b=20))
+    return fig
 
 def get_latest_news():
-    # סריקת כותרות מ-World News
-    feed = feedparser.parse("https://news.google.com/rss/search?q=Iran+Israel+Attack")
-    return [post.title for post in feed.entries[:5]]
+    try:
+        feed = feedparser.parse("https://news.google.com/rss/search?q=Iran+Israel+USA+Attack")
+        return [post.title for post in feed.entries[:8]]
+    except:
+        return []
 
-# משיכת נתונים
-oil = get_data("CL=F")      # נפט
-gold = get_data("GC=F")     # זהב
-vix = get_data("^VIX")      # מדד הפחד
-ils = get_data("USDILS=X") # שער הדולר/שקל
-ta35 = get_data("TA35.TA") # בורסת תל אביב
-
+# --- איסוף וחישוב נתונים ---
 headlines = get_latest_news()
 
-# חישוב רמת סיכון מורכב
-risk_score = 10
-# בדיקת כותרות
-keywords = ["Immediate", "Escalation", "Retaliation", "Launch", "Alert"]
-found_keywords = [w for w in keywords if any(w.lower() in h.lower() for h in headlines)]
-risk_score += (len(found_keywords) * 15)
+# חישוב סבירות נגד ישראל
+score_israel = 20
+if any(word in h.lower() for h in headlines for word in ["israel", "tel aviv", "jerusalem"]): score_israel += 30
+if any(word in h.lower() for h in headlines for word in ["attack", "missile", "strike"]): score_israel += 25
 
-# בדיקת מדדים כלכליים
-if ils > 3.75: risk_score += 15  # שקל נחלש
-if vix > 25: risk_score += 20    # פחד עולמי עולה
-if oil > 90: risk_score += 15    # נפט מזנק
+# חישוב סבירות נגד ארה"ב
+score_usa = 15
+if any(word in h.lower() for h in headlines for word in ["usa", "biden", "american", "pentagon"]): score_usa += 35
+if any(word in h.lower() for h in headlines for word in ["red sea", "base", "retaliation"]): score_usa += 20
 
-# --- ממשק המשתמש ---
-col1, col2 = st.columns([1, 2])
+# וידוא שהציון לא עובר 100
+score_israel = min(score_israel, 100)
+score_usa = min(score_usa, 100)
+
+# --- תצוגת המדים ---
+col1, col2 = st.columns(2)
 
 with col1:
-    st.subheader("📊 מדדים ואינדיקטורים")
-    
-    # תצוגה בשתי עמודות פנימיות
-    m1, m2 = st.columns(2)
-    m1.metric("נפט (WTI)", f"${oil:.2f}")
-    m2.metric("דולר/שקל", f"₪{ils:.3f}")
-    m1.metric("מדד הפחד", f"{vix:.2f}")
-    m2.metric("זהב", f"${gold:.1f}")
-    
-    st.write("---")
-    st.subheader("📰 ניתוח כותרות בזמן אמת")
-    for h in headlines:
-        st.caption(f"• {h}")
-    
-    st.write("---")
-    st.subheader("⚠️ סבירות תקיפה משוקללת")
-    if risk_score < 30:
-        st.success(f"רמת סיכון: שגרה ({risk_score}%)")
-    elif risk_score < 65:
-        st.warning(f"רמת סיכון: כוננות גבוהה ({risk_score}%)")
-    else:
-        st.error(f"רמת סיכון: חשש למתקפה מיידית ({risk_score}%)")
-
-    # כפתור שיתוף
-    share_msg = f"🛡️ *סטטוס מודיעיני - אלירם*\nסבירות תקיפה: {risk_score}%\nשער הדולר: ₪{ils:.3f}\nמחיר נפט: ${oil:.2f}"
-    st.markdown(f'<a href="https://api.whatsapp.com/send?text={urllib.parse.quote(share_msg)}" target="_blank"><button style="background-color: #25D366; color: white; padding: 12px; border: none; border-radius: 8px; width: 100%; cursor: pointer; font-weight: bold;">שתף דיווח בוואטסאפ 💬</button></a>', unsafe_allow_html=True)
+    st.plotly_chart(create_gauge("סבירות תקיפה נגד ישראל", score_israel, "red"), use_container_width=True)
 
 with col2:
-    st.subheader("🗺️ מפת פריסה ואיומים")
-    m = folium.Map(location=[32.427, 53.688], zoom_start=5, tiles="CartoDB dark_matter")
-    # טהראן
-    folium.CircleMarker([35.68, 51.38], radius=10, color="red", fill=True, popup="מרכזי שליטה").add_to(m)
-    # בסיסי טילים במערב
-    folium.Circle([34.34, 47.09], radius=70000, color="orange", fill=True, popup="אזור שיגור טקטי").add_to(m)
-    folium_static(m)
+    st.plotly_chart(create_gauge("סבירות תקיפה נגד ארה״ב", score_usa, "blue"), use_container_width=True)
 
-st.caption(f"המערכת מנתחת נתוני שוק וחדשות גלובליים | באר שבע | {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+st.write("---")
+
+# --- מידע נוסף ---
+c1, c2 = st.columns([1, 2])
+with c1:
+    st.subheader("📰 כותרות שנסרקו")
+    for h in headlines[:5]:
+        st.caption(f"• {h}")
+
+with c2:
+    st.subheader("📲 שיתוף סטטוס")
+    share_msg = f"🛡️ *דו״ח איומים - אלירם*\n🇮🇱 סבירות נגד ישראל: {score_israel}%\n🇺🇸 סבירות נגד ארה״ב: {score_usa}%"
+    wa_link = f"https://api.whatsapp.com/send?text={urllib.parse.quote(share_msg)}"
+    st.markdown(f'<a href="{wa_link}" target="_blank"><button style="background-color: #25D366; color: white; padding: 15px; border: none; border-radius: 10px; width: 100%; cursor: pointer; font-weight: bold;">שתף את המדדים בוואטסאפ 💬</button></a>', unsafe_allow_html=True)
+
+st.caption(f"המערכת מנטרת אינדיקטורים בזמן אמת | מיקום שרת: באר שבע | {datetime.now().strftime('%H:%M:%S')}")
