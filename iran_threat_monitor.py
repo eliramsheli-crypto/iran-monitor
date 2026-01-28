@@ -11,10 +11,11 @@ st.set_page_config(page_title="מערכת ניטור איומים - אלירם",
 
 st.title("🛡️ לוח בקרה מודיעיני: איראן - ישראל")
 
-# פונקציה ליצירת קישור וואטסאפ
-def send_whatsapp_msg(phone, message):
+# פונקציה ליצירת קישור וואטסאפ ללא מספר מוגדר (פותח בחירת איש קשר)
+def get_whatsapp_link(message):
     encoded_msg = urllib.parse.quote(message)
-    return f"https://wa.me/{phone}?text={encoded_msg}"
+    # שימוש ב-send ללא מספר טלפון פותח את רשימת אנשי הקשר של המשתמש
+    return f"https://api.whatsapp.com/send?text={encoded_msg}"
 
 # נתוני אמת - מחיר נפט
 def get_oil_price():
@@ -34,28 +35,44 @@ with col1:
     st.metric("מחיר חבית נפט (WTI)", f"${oil_price:.2f}")
     
     st.write("---")
-    st.subheader("📲 דיווח מהיר")
+    st.subheader("📲 שיתוף דיווח")
+    st.write("לחץ על הכפתור כדי לשלוח את הנתונים הנוכחיים לוואטסאפ שלך:")
     
-    # משיכת מספר הטלפון מהכספת (Secrets) לשמירה על פרטיות
-    try:
-        my_phone = st.secrets["MY_PHONE_NUMBER"]
-    except:
-        my_phone = "972500000000"
-        st.warning("נא להגדיר מספר טלפון ב-Secrets")
+    # בניית הודעת הדיווח
+    alert_text = (
+        f"🛡️ *דיווח ממערכת הניטור של אלירם*\n"
+        f"--- --- --- ---\n"
+        f"📈 מחיר נפט: ${oil_price:.2f}\n"
+        f"⏰ זמן עדכון: {datetime.now().strftime('%H:%M')}\n"
+        f"📍 המערכת פועלת כעת מבאר שבע"
+    )
     
-    alert_text = f"⚠️ עדכון אבטחה:\nמחיר נפט: ${oil_price:.2f}\nזמן: {datetime.now().strftime('%H:%M')}"
-    wa_link = send_whatsapp_msg(my_phone, alert_text)
+    wa_link = get_whatsapp_link(alert_text)
     
+    # כפתור וואטסאפ מעוצב
     st.markdown(f'''
         <a href="{wa_link}" target="_blank">
-            <button style="background-color: #25D366; color: white; padding: 10px; border: none; border-radius: 5px; width: 100%; cursor: pointer;">
-                שלח דיווח ל-WhatsApp 💬
+            <button style="
+                background-color: #25D366;
+                color: white;
+                padding: 15px 25px;
+                border: none;
+                border-radius: 10px;
+                width: 100%;
+                cursor: pointer;
+                font-weight: bold;
+                font-size: 18px;">
+                שתף דיווח ב-WhatsApp 💬
             </button>
         </a>
     ''', unsafe_allow_html=True)
+    
+    st.info("לחיצה על הכפתור תפתח את הוואטסאפ ותאפשר לך לבחור את עצמך או קבוצה לשליחת הדיווח.")
 
 with col2:
     st.subheader("🗺️ מפת פריסה ואיומים")
     m = folium.Map(location=[32.427, 53.688], zoom_start=5, tiles="CartoDB dark_matter")
     folium.CircleMarker([35.68, 51.38], radius=10, color="red", fill=True, popup="טהרן").add_to(m)
     folium_static(m)
+
+st.caption(f"זמן שרת: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
