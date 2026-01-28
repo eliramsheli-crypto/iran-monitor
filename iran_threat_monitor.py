@@ -12,7 +12,7 @@ st.set_page_config(page_title="מערכת ניטור איומים - אלירם",
 st.title("🛡️ לוח בקרה מודיעיני: איראן - ישראל")
 
 # --- פונקציות נתונים ---
-def get_market_data(ticker):
+def get_data(ticker):
     try:
         data = yf.Ticker(ticker)
         return data.history(period="1d")['Close'].iloc[-1]
@@ -20,52 +20,69 @@ def get_market_data(ticker):
         return 0.0
 
 def get_latest_news():
-    # סריקת כותרות מרויטרס (חדשות עולם)
-    feed = feedparser.parse("https://qz.com/feed") # דוגמה למקור חדשות פתוח
-    headlines = [post.title for post in feed.entries[:5]]
-    return headlines
+    # סריקת כותרות מ-World News
+    feed = feedparser.parse("https://news.google.com/rss/search?q=Iran+Israel+Attack")
+    return [post.title for post in feed.entries[:5]]
 
 # משיכת נתונים
-oil_price = get_market_data("CL=F")
-gold_price = get_market_data("GC=F")
-vix_index = get_market_data("^VIX")
-news_headlines = get_latest_news()
+oil = get_data("CL=F")      # נפט
+gold = get_data("GC=F")     # זהב
+vix = get_data("^VIX")      # מדד הפחד
+ils = get_data("USDILS=X") # שער הדולר/שקל
+ta35 = get_data("TA35.TA") # בורסת תל אביב
 
-# חישוב רמת סיכון
-risk_score = 15
-keywords = ["Iran", "Attack", "Israel", "Missile", "Conflict", "Threat"]
-found_keywords = [word for word in keywords if any(word.lower() in h.lower() for h in news_headlines)]
+headlines = get_latest_news()
 
-risk_score += (len(found_keywords) * 15) # כל מילת מפתח מעלה את הסיכון
-if oil_price > 85: risk_score += 20
-if vix_index > 22: risk_score += 20
+# חישוב רמת סיכון מורכב
+risk_score = 10
+# בדיקת כותרות
+keywords = ["Immediate", "Escalation", "Retaliation", "Launch", "Alert"]
+found_keywords = [w for w in keywords if any(w.lower() in h.lower() for h in headlines)]
+risk_score += (len(found_keywords) * 15)
+
+# בדיקת מדדים כלכליים
+if ils > 3.75: risk_score += 15  # שקל נחלש
+if vix > 25: risk_score += 20    # פחד עולמי עולה
+if oil > 90: risk_score += 15    # נפט מזנק
 
 # --- ממשק המשתמש ---
 col1, col2 = st.columns([1, 2])
 
 with col1:
-    st.subheader("📊 אינדיקטורים וסיכונים")
-    st.metric("מחיר נפט (WTI)", f"${oil_price:.2f}")
-    st.metric("מדד הפחד (VIX)", f"{vix_index:.2f}")
+    st.subheader("📊 מדדים ואינדיקטורים")
+    
+    # תצוגה בשתי עמודות פנימיות
+    m1, m2 = st.columns(2)
+    m1.metric("נפט (WTI)", f"${oil:.2f}")
+    m2.metric("דולר/שקל", f"₪{ils:.3f}")
+    m1.metric("מדד הפחד", f"{vix:.2f}")
+    m2.metric("זהב", f"${gold:.1f}")
     
     st.write("---")
-    st.subheader("📰 כותרות אחרונות (סריקת מילים)")
-    for h in news_headlines:
-        st.write(f"• {h}")
+    st.subheader("📰 ניתוח כותרות בזמן אמת")
+    for h in headlines:
+        st.caption(f"• {h}")
     
     st.write("---")
-    st.subheader("⚠️ הערכת סבירות נוכחית")
-    if risk_score < 40:
-        st.success(f"רמת סיכון: נמוכה ({risk_score}%)")
-    elif risk_score < 75:
-        st.warning(f"רמת סיכון: בינונית - כוננות מוגברת ({risk_score}%)")
+    st.subheader("⚠️ סבירות תקיפה משוקללת")
+    if risk_score < 30:
+        st.success(f"רמת סיכון: שגרה ({risk_score}%)")
+    elif risk_score < 65:
+        st.warning(f"רמת סיכון: כוננות גבוהה ({risk_score}%)")
     else:
-        st.error(f"רמת סיכון: גבוהה - חשש מיידי ({risk_score}%)")
+        st.error(f"רמת סיכון: חשש למתקפה מיידית ({risk_score}%)")
 
-    # כפתור שיתוף וואטסאפ
-    alert_text = f"🛡️ *עדכון אבטחה - אלירם*\nסבירות תקיפה: {risk_score}%\nנפט: ${oil_price:.2f}\nזמן: {datetime.now().strftime('%H:%M')}"
-    wa_link = f"https://api.whatsapp.com/send?text={urllib.parse.quote(alert_text)}"
-    st.markdown(f'<a href="{wa_link}" target="_blank"><button style="background-color: #25D366; color: white; padding: 10px; border: none; border-radius: 5px; width: 100%; cursor: pointer;">שתף סטטוס בוואטסאפ 💬</button></a>', unsafe_allow_html=True)
+    # כפתור שיתוף
+    share_msg = f"🛡️ *סטטוס מודיעיני - אלירם*\nסבירות תקיפה: {risk_score}%\nשער הדולר: ₪{ils:.3f}\nמחיר נפט: ${oil:.2f}"
+    st.markdown(f'<a href="https://api.whatsapp.com/send?text={urllib.parse.quote(share_msg)}" target="_blank"><button style="background-color: #25D366; color: white; padding: 12px; border: none; border-radius: 8px; width: 100%; cursor: pointer; font-weight: bold;">שתף דיווח בוואטסאפ 💬</button></a>', unsafe_allow_html=True)
 
 with col2:
-    st.subheader("🗺️
+    st.subheader("🗺️ מפת פריסה ואיומים")
+    m = folium.Map(location=[32.427, 53.688], zoom_start=5, tiles="CartoDB dark_matter")
+    # טהראן
+    folium.CircleMarker([35.68, 51.38], radius=10, color="red", fill=True, popup="מרכזי שליטה").add_to(m)
+    # בסיסי טילים במערב
+    folium.Circle([34.34, 47.09], radius=70000, color="orange", fill=True, popup="אזור שיגור טקטי").add_to(m)
+    folium_static(m)
+
+st.caption(f"המערכת מנתחת נתוני שוק וחדשות גלובליים | באר שבע | {datetime.now().strftime('%d/%m/%Y %H:%M')}")
