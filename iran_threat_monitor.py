@@ -30,13 +30,15 @@ def plot_sparkline(data, color):
     )
     return fig
 
+# פונקציה מעודכנת להצגת אחוזים במדד
 def create_gauge(title, value, color):
     fig = go.Figure(go.Indicator(
         mode = "gauge+number",
         value = value,
-        title = {'text': title, 'font': {'size': 18}},
+        number = {'suffix': "%", 'font': {'size': 40}}, # הוספת סיומת אחוזים
+        title = {'text': title, 'font': {'size': 20}},
         gauge = {
-            'axis': {'range': [0, 100]},
+            'axis': {'range': [0, 100], 'ticksuffix': "%"}, # אחוזים על השנתות
             'bar': {'color': color},
             'steps': [
                 {'range': [0, 30], 'color': "#e8f5e9"},
@@ -45,7 +47,7 @@ def create_gauge(title, value, color):
             ]
         }
     ))
-    fig.update_layout(height=230, margin=dict(l=20, r=20, t=50, b=20))
+    fig.update_layout(height=280, margin=dict(l=30, r=30, t=50, b=20))
     return fig
 
 # --- איסוף נתונים ---
@@ -54,31 +56,28 @@ ils_val, ils_chg, ils_hist = get_indicator_data("USDILS=X")
 vix_val, vix_chg, vix_hist = get_indicator_data("^VIX")
 gold_val, gold_chg, gold_hist = get_indicator_data("GC=F")
 
-# סריקת חדשות ממוקדת יותר
+# סריקת חדשות ממוקדת
 headlines = []
 try:
-    feed = feedparser.parse("https://news.google.com/rss/search?q=Iran+Israel+USA+Attack+threat+imminent")
+    feed = feedparser.parse("https://news.google.com/rss/search?q=Iran+Israel+USA+Attack+threat")
     headlines = [post.title.lower() for post in feed.entries[:10]]
 except: pass
 
-# --- לוגיקת שקלול מעודכנת (כיול מחדש) ---
-# ישראל
-base_israel = 15 # רמת מתח בסיסית באזור
+# --- לוגיקת שקלול שמרנית ---
 news_israel = sum(2 for h in headlines if "israel" in h or "tel aviv" in h)
-threat_israel = sum(5 for h in headlines if "imminent" in h or "launch" in h or "retaliate" in h)
-market_israel = 15 if ils_chg > 1.5 else 0 # השפעת פיחות השקל
+threat_israel = sum(5 for h in headlines if "imminent" in h or "retaliate" in h)
+market_israel = 15 if ils_chg > 1.2 else 0
 
-score_israel = min(base_israel + news_israel + threat_israel + market_israel, 100)
+# חישוב אחוז סופי (בסיס 15%)
+score_israel = min(15 + news_israel + threat_israel + market_israel, 100)
 
-# ארה"ב
-base_usa = 10
-news_usa = sum(2 for h in headlines if "usa" in h or "pentagon" in h or "biden" in h)
-threat_usa = sum(5 for h in headlines if "base" in h or "red sea" in h)
-market_usa = 15 if oil_chg > 3.0 else 0 # השפעת זינוק בנפט
+news_usa = sum(2 for h in headlines if "usa" in h or "pentagon" in h)
+threat_usa = sum(5 for h in headlines if "base" in h or "navy" in h)
+market_usa = 15 if oil_chg > 2.5 else 0
 
-score_usa = min(base_usa + news_usa + threat_usa + market_usa, 100)
+score_usa = min(10 + news_usa + threat_usa + market_usa, 100)
 
-# --- תצוגה ---
+# --- תצוגת המדים ---
 col_g1, col_g2 = st.columns(2)
 with col_g1:
     st.plotly_chart(create_gauge("הסתברות תקיפה נגד ישראל", score_israel, "#FF4B4B"), use_container_width=True)
@@ -88,18 +87,4 @@ with col_g2:
 st.write("---")
 st.subheader("🔍 אינדיקטורים לשקלול המדדים")
 
-def draw_row(label, val, unit, chg, hist, color):
-    c1, c2, c3, c4 = st.columns([3, 2, 2, 2])
-    c1.write(label)
-    c2.write(f"**{val:.2f} {unit}**")
-    c3.write(f"{'📈' if chg > 0 else '📉'} {chg:.2f}%")
-    with c4:
-        if len(hist) > 0:
-            st.plotly_chart(plot_sparkline(hist, color), config={'displayModeBar': False})
-
-draw_row("מחיר נפט (WTI)", oil_val, "$", oil_chg, oil_hist, "#FF4B4B")
-draw_row("שער דולר/שקל", ils_val, "₪", ils_chg, ils_hist, "#1C83E1")
-draw_row("מדד הפחד (VIX)", vix_val, "pts", vix_chg, vix_hist, "#FFA500")
-draw_row("מחיר הזהב", gold_val, "$", gold_chg, gold_hist, "#FFD700")
-
-st.caption(f"מיקום: באר שבע | זמן עדכון: {datetime.now().strftime('%H:%M:%S')}")
+def
